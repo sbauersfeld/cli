@@ -44,21 +44,61 @@ func TestResolveNonAuthFromEnvSkipsHostAndAuth(t *testing.T) {
 	t.Setenv("DATABRICKS_DISCOVERY_URL", "https://discovery.env.test")
 	t.Setenv("DATABRICKS_TOKEN_AUDIENCE", "env-audience")
 	t.Setenv("DATABRICKS_CLOUD", "azure")
+	// workspace_id and account_id are routing identifiers; a profile that sets
+	// them must win, so they are skipped too (#5096).
+	t.Setenv("DATABRICKS_WORKSPACE_ID", "env-workspace")
+	t.Setenv("DATABRICKS_ACCOUNT_ID", "env-account")
 	t.Setenv("DATABRICKS_CLUSTER_ID", "env-cluster")
 
 	cfg := &config.Config{}
 	err := ResolveNonAuthFromEnv.Configure(cfg)
 	require.NoError(t, err)
 
-	// Host and auth settings are left for the profile (config file) to set.
+	// Host, routing and auth settings are left for the profile (config file) to set.
 	assert.Empty(t, cfg.Host)
 	assert.Empty(t, cfg.Token)
 	assert.Empty(t, cfg.AuthType)
 	assert.Empty(t, cfg.DiscoveryURL)
 	assert.Empty(t, cfg.TokenAudience)
 	assert.Empty(t, cfg.Cloud)
+	assert.Empty(t, cfg.WorkspaceID)
+	assert.Empty(t, cfg.AccountID)
 	// Non-auth attributes are still populated from the environment.
 	assert.Equal(t, "env-cluster", cfg.ClusterID)
+}
+
+// TestNonAuthEnvSkipAttrsCoverSDKInternalEnvAttrs guards against an SDK bump
+// silently re-introducing #5096. nonAuthEnvSkipAttrs and HasAuthAttribute
+// together must classify every env-backed attribute that steers authentication.
+// The dangerous category is attributes the SDK tags `auth:"-"` (Internal, so
+// HasAuthAttribute returns false) yet read from the environment: if the SDK
+// adds a new auth-steering one, it would shadow the selected profile again.
+//
+// Every Internal env-backed attribute must therefore be either skipped
+// (auth-steering) or listed below as a reviewed env-first attribute (it does
+// not change which credentials authenticate or where the request is routed).
+// A new SDK attribute fails this test until a human classifies it.
+func TestNonAuthEnvSkipAttrsCoverSDKInternalEnvAttrs(t *testing.T) {
+	knownEnvFirstInternal := map[string]bool{
+		"oauth_callback_port":         true,
+		"disable_oauth_refresh_token": true,
+		"debug_truncate_bytes":        true,
+		"debug_headers":               true,
+		"rate_limit":                  true,
+	}
+
+	for _, attr := range config.ConfigAttributes {
+		if !attr.Internal || len(attr.EnvVars) == 0 {
+			continue
+		}
+		if nonAuthEnvSkipAttrs[attr.Name] || knownEnvFirstInternal[attr.Name] {
+			continue
+		}
+		t.Errorf("SDK config attribute %q (env %v) is internal (auth:\"-\") but unclassified: "+
+			"add it to nonAuthEnvSkipAttrs if it steers auth/routing, or to "+
+			"knownEnvFirstInternal if env-first precedence is safe (#5096)",
+			attr.Name, attr.EnvVars)
+	}
 }
 
 func TestLoaderSkipsExplicitAuthType(t *testing.T) {

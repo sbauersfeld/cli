@@ -201,12 +201,11 @@ func MustAccountClient(cmd *cobra.Command, args []string) error {
 	pr, hasProfileFlag := profileFlagValue(cmd)
 	if hasProfileFlag {
 		cfg.Profile = pr
-		// An explicit --profile must take precedence over authentication
-		// environment variables; see the matching comment in MustWorkspaceClient
-		// and issue #5096. We deliberately skip NormalizeDatabricksConfigFromEnv
-		// here: with --profile the host comes from the profile, not from
-		// DATABRICKS_HOST, so promoting that env var's ?o=/?a= query params
-		// would be wrong.
+		// An explicit --profile takes precedence over auth environment
+		// variables; see databrickscfg.ProfileAuthLoaders (#5096). We also skip
+		// NormalizeDatabricksConfigFromEnv here: with --profile the host comes
+		// from the profile, not from DATABRICKS_HOST, so promoting that env
+		// var's ?o=/?a= query params would be wrong.
 		cfg.Loaders = databrickscfg.ProfileAuthLoaders
 	} else {
 		auth.NormalizeDatabricksConfigFromEnv(ctx, cfg)
@@ -332,17 +331,14 @@ func MustWorkspaceClient(cmd *cobra.Command, args []string) error {
 	profile, hasProfileFlag := profileFlagValue(cmd)
 	if hasProfileFlag {
 		cfg.Profile = profile
-		// An explicit --profile must take precedence over authentication
-		// environment variables (DATABRICKS_HOST, DATABRICKS_TOKEN, ...);
-		// see databrickscfg.ProfileAuthLoaders and issue #5096.
-		//
-		// We deliberately skip NormalizeDatabricksConfigFromEnv here: with
-		// --profile the host comes from the profile, not from DATABRICKS_HOST,
-		// so promoting that env var's ?o=/?a= query params would be wrong. The
-		// one edge this drops is a host-less profile combined with a SPOG-style
-		// DATABRICKS_HOST (https://host/?o=123): the workspace_id is no longer
-		// extracted from the query, which is an accepted trade-off for that
-		// unusual combination.
+		// An explicit --profile takes precedence over auth environment
+		// variables; see databrickscfg.ProfileAuthLoaders (#5096). We also skip
+		// NormalizeDatabricksConfigFromEnv here: with --profile the host comes
+		// from the profile, not from DATABRICKS_HOST, so promoting that env
+		// var's ?o=/?a= query params would be wrong. The one edge this drops is
+		// a host-less profile combined with a SPOG-style DATABRICKS_HOST
+		// (https://host/?o=123): the workspace_id is no longer extracted from
+		// the query, an accepted trade-off for that unusual combination.
 		cfg.Loaders = databrickscfg.ProfileAuthLoaders
 	} else {
 		auth.NormalizeDatabricksConfigFromEnv(ctx, cfg)
