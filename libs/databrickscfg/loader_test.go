@@ -37,10 +37,13 @@ func TestLoaderSkipsExistingAuth(t *testing.T) {
 func TestResolveNonAuthFromEnvSkipsHostAndAuth(t *testing.T) {
 	t.Setenv("DATABRICKS_HOST", "https://env.test")
 	t.Setenv("DATABRICKS_TOKEN", "env-token")
-	// auth_type and discovery_url are tagged auth:"-" in the SDK, so
-	// HasAuthAttribute can't catch them; they must still be skipped (#5096).
+	// auth_type, discovery_url, audience and cloud are tagged auth:"-" in the
+	// SDK, so HasAuthAttribute can't catch them; they steer authentication and
+	// must still be skipped (#5096).
 	t.Setenv("DATABRICKS_AUTH_TYPE", "oauth-m2m")
 	t.Setenv("DATABRICKS_DISCOVERY_URL", "https://discovery.env.test")
+	t.Setenv("DATABRICKS_TOKEN_AUDIENCE", "env-audience")
+	t.Setenv("DATABRICKS_CLOUD", "azure")
 	t.Setenv("DATABRICKS_CLUSTER_ID", "env-cluster")
 
 	cfg := &config.Config{}
@@ -52,6 +55,8 @@ func TestResolveNonAuthFromEnvSkipsHostAndAuth(t *testing.T) {
 	assert.Empty(t, cfg.Token)
 	assert.Empty(t, cfg.AuthType)
 	assert.Empty(t, cfg.DiscoveryURL)
+	assert.Empty(t, cfg.TokenAudience)
+	assert.Empty(t, cfg.Cloud)
 	// Non-auth attributes are still populated from the environment.
 	assert.Equal(t, "env-cluster", cfg.ClusterID)
 }
